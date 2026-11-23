@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Start Hyland OpenArch
+        run: docker compose -f docker/compose.yaml up -d --wait
+
+      # The end-to-end test needs a local embedding model and is skipped here.
+      - name: Build and test
+        run: mvn -B verify
+        env:
+          OPENARCH_URL: http://localhost:8080
+
+      - name: Engine logs
+        if: failure()
+        run: docker compose -f docker/compose.yaml logs --tail 200 openarch-app
+
+      - name: Stop Hyland OpenArch
+        if: always()
+        run: docker compose -f docker/compose.yaml down
