@@ -157,7 +157,11 @@ public class OpenArchVectorStore extends AbstractObservationVectorStore implemen
 			.build();
 	}
 
-	/** Creates the folders of {@code basePath} when {@code initializeSchema} is set. */
+	/**
+	 * Creates the missing folders of {@code basePath} when {@code initializeSchema} is set.
+	 * Existing folders are only read, so a non-admin user works when an admin has created the
+	 * base path and given that user access to it.
+	 */
 	@Override
 	public void afterPropertiesSet() {
 		if (!this.initializeSchema) {
@@ -165,18 +169,31 @@ public class OpenArchVectorStore extends AbstractObservationVectorStore implemen
 		}
 		String parent = "";
 		for (String segment : this.basePath.substring(1).split("/")) {
-			try {
-				this.restClient.post()
-					.uri(pathUri(parent, "enforceSysName=true"))
-					.contentType(MediaType.APPLICATION_JSON)
-					.body(Map.of("sys_primaryType", "SysFolder", "sys_name", segment))
-					.retrieve()
-					.toBodilessEntity();
+			String path = parent + "/" + segment;
+			if (!folderExists(path)) {
+				try {
+					this.restClient.post()
+						.uri(pathUri(parent, "enforceSysName=true"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.body(Map.of("sys_primaryType", "SysFolder", "sys_name", segment))
+						.retrieve()
+						.toBodilessEntity();
+				}
+				catch (HttpClientErrorException.Conflict ex) {
+					// Created in the meantime.
+				}
 			}
-			catch (HttpClientErrorException.Conflict ex) {
-				// The folder already exists.
-			}
-			parent = parent + "/" + segment;
+			parent = path;
+		}
+	}
+
+	private boolean folderExists(String path) {
+		try {
+			this.restClient.get().uri(pathUri(path, null)).retrieve().toBodilessEntity();
+			return true;
+		}
+		catch (HttpClientErrorException.NotFound ex) {
+			return false;
 		}
 	}
 

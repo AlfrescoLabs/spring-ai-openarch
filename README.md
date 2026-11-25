@@ -138,11 +138,11 @@ Do not mix embedding models in one collection: vectors from different models can
 
 ## Limitations
 
-- Each new document costs five HTTP calls: a lookup for an existing id, the document, two calls to upload the Parquet file, and the child. A replace costs one more (the delete). Each `add` or `delete` call also waits once for the index when `wait-for-indexing` is on. Bulk loads are slow.
+- Each new document costs five HTTP calls: a lookup for an existing id, the document, two calls to upload the Parquet file, and the child. A replace costs one more (the delete). Each `add` or `delete` call also waits once for the index when `wait-for-indexing` is on. Bulk loads are slow: on a laptop, 1000 documents in 10 `add` calls took about 5 minutes (about 3 documents per second), with `wait-for-indexing` on or off.
 - Writes are not atomic. A replace deletes the old document first, so a failed call can lose the old version or leave a document with no vector.
 - Writing Parquet needs `hadoop-common`, which is a large dependency.
 - The search does not use the permissions of Hyland OpenArch yet: every document of the collection is visible to the configured user.
-- The examples use `admin`, the default user of the engine image. Admin users skip the permission filter of the engine. Outside tests, use a non-admin account with rights on the base path.
+- The examples use `admin`, the default user of the engine image. Admin users skip the permission filter of the engine. Outside tests, use a non-admin account with rights on the base path (see [Non-admin user](#non-admin-user)).
 
 ## Build
 
@@ -158,7 +158,21 @@ OPENARCH_URL=http://localhost:8080 mvn verify
 docker compose -f docker/compose.yaml down
 ```
 
-`docker/compose.yaml` starts Hyland OpenArch with MongoDB and OpenSearch, for tests only. Set `OPENARCH_PORT` if port 8080 is in use. The end-to-end test also needs an embedding model; see [CONTRIBUTING.md](CONTRIBUTING.md).
+`docker/compose.yaml` starts Hyland OpenArch with MongoDB and OpenSearch, for tests only. Its users come from `docker/users.yml`: `admin` / `password` (administrator) and `springai` / `springai` (non-admin). Set `OPENARCH_PORT` if port 8080 is in use. The end-to-end test also needs an embedding model; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Non-admin user
+
+A non-admin user has no rights on the root folder, so an admin creates the base path and gives the user access to it. With the test stack:
+
+```bash
+curl -u admin:password -H 'HXCS-REPOSITORY: default' -H 'Content-Type: application/json' \
+  -X POST http://localhost:8080/api/documents/path/ \
+  -d '{"sys_primaryType":"SysFolder","sys_name":"spring-ai","sys_acl":[{"user":{"id":"315efe3b-8001-49b0-b653-6492b3bdfd13"},"permission":"ReadWrite","granted":true}]}'
+
+OPENARCH_URL=http://localhost:8080 OPENARCH_USER=springai OPENARCH_PASSWORD=springai mvn verify
+```
+
+The id is the id of `springai` in `docker/users.yml`. With `initialize-schema`, the store only reads folders that exist and creates the missing ones.
 
 ## License
 

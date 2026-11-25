@@ -1,5 +1,6 @@
 # Hyland OpenArch engine for the integration tests. Test use only: no authentication on
-# MongoDB and OpenSearch, and the image default users (admin:password).
+# MongoDB and OpenSearch. Users come from users.yml: admin:password (administrator) and
+# springai:springai (non-admin).
 #
 #   docker compose -f docker/compose.yaml up -d --wait
 #   OPENARCH_URL=http://localhost:8080 mvn verify
@@ -19,7 +20,10 @@ services:
       NUXEO_MONGODB_SERVER: mongo:27017
       NUXEO_MONGODB_DBNAME: openarch
       NUXEO_URL: "http://localhost:${OPENARCH_PORT:-8080}"
+      OPENARCH_USERS_FILE: file:/etc/openarch/users.yml
       JAVA_OPTIONS: -Daws.crt.libc=musl -Xmx1g
+    volumes:
+      - ./users.yml:/etc/openarch/users.yml:ro
     ports:
       - "127.0.0.1:${OPENARCH_PORT:-8080}:8080"
     healthcheck:

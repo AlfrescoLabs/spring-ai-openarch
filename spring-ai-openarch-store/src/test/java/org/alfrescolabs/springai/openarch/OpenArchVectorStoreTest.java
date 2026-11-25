@@ -49,13 +49,36 @@ class OpenArchVectorStoreTest {
 
 	private OpenArchVectorStore store;
 
+	private RestClient restClient;
+
 	@BeforeEach
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder().baseUrl(URL);
 		this.server = MockRestServiceServer.bindTo(builder).build();
-		this.store = OpenArchVectorStore.builder(builder.build(), new FixedEmbeddingModel())
+		this.restClient = builder.build();
+		this.store = OpenArchVectorStore.builder(this.restClient, new FixedEmbeddingModel())
 			.collection("books")
 			.build();
+	}
+
+	@Test
+	void initializeSchemaCreatesOnlyMissingFolders() {
+		OpenArchVectorStore initializing = OpenArchVectorStore.builder(this.restClient, new FixedEmbeddingModel())
+			.basePath("/apps/spring-ai")
+			.initializeSchema(true)
+			.build();
+		this.server.expect(requestTo(URL + "/api/documents/path/apps"))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withSuccess("{\"sys_id\":\"f1\"}", MediaType.APPLICATION_JSON));
+		this.server.expect(requestTo(URL + "/api/documents/path/apps/spring-ai"))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withStatus(HttpStatus.NOT_FOUND));
+		this.server.expect(requestTo(URL + "/api/documents/path/apps?enforceSysName=true"))
+			.andExpect(method(HttpMethod.POST))
+			.andExpect(jsonPath("$.sys_name").value("spring-ai"))
+			.andRespond(withSuccess("{\"sys_id\":\"f2\"}", MediaType.APPLICATION_JSON));
+		initializing.afterPropertiesSet();
+		this.server.verify();
 	}
 
 	@Test

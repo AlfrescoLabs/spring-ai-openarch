@@ -1,0 +1,29 @@
+# Hyland OpenArch users for the integration tests and demos. Test use only.
+# The engine reads this file at startup. Passwords are bcrypt hashes:
+#   admin / password     administrator (skips the permission filter)
+#   springai / springai  non-admin user for the store, member of "members"
+administratorsGroups:
+  - administrators
+groups:
+  - id: 5324ec90-ba1e-4030-8e6a-d815c6f3d4b1
+    name: administrators
+  - id: 8d6542c9-50e9-4027-aa10-2cfb2179413f
+    name: members
+users:
+  - id: 00000000-0000-0000-0000-000000000001
+    username: admin
+    password: "{bcrypt}$2a$10$55Rykk8VfPhAsKESlGrxYODgVfDPWPgS01ZBgDOPpKpPOzb6PuT6i"
+    firstName: Admin
+    lastName: User
+    email: admin@example.com
+    groups:
+      - administrators
+      - members
+  - id: 315efe3b-8001-49b0-b653-6492b3bdfd13
+    username: springai
+    password: "{bcrypt}$2a$10$9aGEZATUeM1L5HSGDmALsObcWoAtM1o0tmUfKvqxLPXj9NO12akIO"
+    firstName: Spring
+    lastName: AI
+    email: springai@example.com
+    groups:
+      - members
