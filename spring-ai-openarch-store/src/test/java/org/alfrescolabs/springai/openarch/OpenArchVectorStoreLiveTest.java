@@ -31,6 +31,8 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
@@ -80,6 +82,15 @@ class OpenArchVectorStoreLiveTest {
 		assertThat(ids(search("genre != 'drama'"))).containsExactly(b);
 		assertThat(ids(search("genre in ['comedy', 'drama'] && year >= 2021"))).containsExactlyInAnyOrder(b, c);
 
+		// Null checks: a document without a year.
+		String noYear = UUID.randomUUID().toString();
+		this.store.add(
+				List.of(Document.builder().id(noYear).text("epsilon").metadata(Map.of("genre", "horror")).build()));
+		FilterExpressionBuilder fb = new FilterExpressionBuilder();
+		assertThat(ids(search(fb.isNull("year").build()))).containsExactly(noYear);
+		assertThat(ids(search(fb.isNotNull("year").build()))).containsExactlyInAnyOrder(a, b, c);
+		this.store.delete(List.of(noYear));
+
 		// Same id replaces the stored document.
 		this.store.add(List.of(doc(a, "delta", "thriller", 2023)));
 		assertThat(search("genre == 'thriller'")).singleElement()
@@ -100,6 +111,10 @@ class OpenArchVectorStoreLiveTest {
 		assertThat(ids(this.store.similaritySearch(SearchRequest.builder().query("gamma").topK(5).build())))
 			.containsExactly(a);
 		this.store.delete(List.of(a));
+	}
+
+	private List<Document> search(Filter.Expression filter) {
+		return this.store.similaritySearch(SearchRequest.builder().query("alpha").topK(10).filterExpression(filter).build());
 	}
 
 	private List<Document> search(String filter) {

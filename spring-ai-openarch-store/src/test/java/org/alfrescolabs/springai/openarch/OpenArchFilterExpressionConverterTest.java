@@ -76,9 +76,46 @@ class OpenArchFilterExpressionConverterTest {
 	}
 
 	@Test
-	void nullChecksAreRejected() {
-		assertThatThrownBy(() -> this.converter.convertExpression(b.isNull("a").build()))
-			.isInstanceOf(UnsupportedOperationException.class);
+	void nullChecks() {
+		assertThat(this.converter.convertExpression(b.isNull("a").build()))
+			.isEqualTo("cin_ingestProperties.a IS NULL");
+		assertThat(this.converter.convertExpression(b.isNotNull("a").build()))
+			.isEqualTo("cin_ingestProperties.a IS NOT NULL");
+	}
+
+	@Test
+	void quotedAndDottedKeys() {
+		assertThat(this.converter.convertExpression(b.eq("'genre'", "drama").build()))
+			.isEqualTo("cin_ingestProperties.genre = 'drama'");
+		assertThat(this.converter.convertExpression(b.eq("book.year", 2020).build()))
+			.isEqualTo("cin_ingestProperties.book.year = 2020");
+	}
+
+	@Test
+	void keysThatAreNotIdentifiersAreRejected() {
+		for (String key : new String[] { "x = 1) OR (y", "a'b", "a b", "1a", "a-b", "a.", "\"x\" OR 1" }) {
+			assertThatThrownBy(() -> this.converter.convertExpression(b.eq(key, "v").build()))
+				.as(key)
+				.isInstanceOf(IllegalArgumentException.class);
+		}
+		Filter.Expression quoted = new FilterExpressionTextParser().parse("'x = 1) OR (y' == 'v'");
+		assertThatThrownBy(() -> this.converter.convertExpression(quoted))
+			.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void valuesThatAreNotNumbersOrBooleansAreQuoted() {
+		Object value = new Object() {
+			@Override
+			public String toString() {
+				return "1 OR x = 'y'";
+			}
+		};
+		assertThat(this.converter.convertExpression(
+				new Filter.Expression(Filter.ExpressionType.EQ, new Filter.Key("a"), new Filter.Value(value))))
+			.isEqualTo("cin_ingestProperties.a = '1 OR x = \\'y\\''");
+		assertThat(this.converter.convertExpression(b.eq("flag", true).build()))
+			.isEqualTo("cin_ingestProperties.flag = true");
 	}
 
 }

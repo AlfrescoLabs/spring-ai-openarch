@@ -120,7 +120,9 @@ Adding a document with an existing id replaces it. Deleting a document also dele
 
 ## Filters
 
-Filter expressions are translated to HXQL, the query language of Hyland OpenArch, on the metadata fields. Supported: `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `nin`, `&&`, `||`, `NOT` and groups. `in` is expanded to `OR`. Null checks (`isNull`, `isNotNull`) are not supported.
+Filter expressions are translated to HXQL, the query language of Hyland OpenArch, on the metadata fields. Supported: `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `nin`, `&&`, `||`, `NOT`, `isNull`, `isNotNull` and groups. `in` is expanded to `OR`. Null checks become `IS NULL` and `IS NOT NULL`.
+
+Keys must be plain identifiers: letters, digits and underscores, with dots between parts. Other keys are rejected, because a key is written into the query text. String values are escaped. Numbers and booleans are written as they are, and any other value is written as an escaped string.
 
 ## Scores
 
@@ -136,7 +138,8 @@ Do not mix embedding models in one collection: vectors from different models can
 
 ## Limitations
 
-- Each added document costs four HTTP calls, plus one lookup to replace an existing id. Bulk loads are slow.
+- Each new document costs five HTTP calls: a lookup for an existing id, the document, two calls to upload the Parquet file, and the child. A replace costs one more (the delete). Each `add` or `delete` call also waits once for the index when `wait-for-indexing` is on. Bulk loads are slow.
+- Writes are not atomic. A replace deletes the old document first, so a failed call can lose the old version or leave a document with no vector.
 - Writing Parquet needs `hadoop-common`, which is a large dependency.
 - The search does not use the permissions of Hyland OpenArch yet: every document of the collection is visible to the configured user.
 

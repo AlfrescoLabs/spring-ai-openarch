@@ -17,6 +17,7 @@
 package org.alfrescolabs.springai.openarch;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.Filter.Expression;
@@ -29,11 +30,19 @@ import org.springframework.ai.vectorstore.filter.converter.AbstractFilterExpress
  * <p>Metadata lives in {@code cin_ingestProperties}, so the key {@code author} becomes
  * {@code cin_ingestProperties.author}. HXQL escapes string literals with a backslash: quote
  * doubling is rejected with HTTP 400. {@code IN} and {@code NIN} are expanded into {@code OR}
- * chains. {@code ISNULL} and {@code ISNOTNULL} are not supported.</p>
+ * chains. {@code ISNULL} and {@code ISNOTNULL} become {@code IS NULL} and {@code IS NOT NULL}.</p>
+ *
+ * <p>Keys are written into the query text, so they must be plain identifiers (letters, digits and
+ * underscores, with dots between parts). Any other key is rejected: a key such as
+ * {@code "x = 1) OR (y"} would otherwise change the query and could leave the collection scope.
+ * Numbers and booleans are written as they are; every other value is written as an escaped string
+ * literal.</p>
  */
 public class OpenArchFilterExpressionConverter extends AbstractFilterExpressionConverter {
 
 	static final String METADATA_PREFIX = "cin_ingestProperties.";
+
+	private static final Pattern KEY = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*");
 
 	@Override
 	protected void doExpression(Expression expression, StringBuilder context) {
@@ -50,8 +59,14 @@ public class OpenArchFilterExpressionConverter extends AbstractFilterExpressionC
 				doIn(expression, context);
 				context.append(')');
 			}
-			case ISNULL, ISNOTNULL -> throw new UnsupportedOperationException(
-					"Hyland OpenArch filters do not support " + type);
+			case ISNULL -> {
+				convertOperand(expression.left(), context);
+				context.append(" IS NULL");
+			}
+			case ISNOTNULL -> {
+				convertOperand(expression.left(), context);
+				context.append(" IS NOT NULL");
+			}
 			default -> {
 				convertOperand(expression.left(), context);
 				context.append(' ').append(operator(type)).append(' ');
@@ -88,17 +103,16 @@ public class OpenArchFilterExpressionConverter extends AbstractFilterExpressionC
 
 	@Override
 	protected void doKey(Filter.Key key, StringBuilder context) {
-		String name = hasOuterQuotes(key.key()) ? removeOuterQuotes(key.key()) : key.key();
-		context.append(METADATA_PREFIX).append(name);
+		context.append(METADATA_PREFIX).append(validKey(key.key()));
 	}
 
 	@Override
 	protected void doSingleValue(Object value, StringBuilder context) {
-		if (value instanceof String text) {
-			context.append('\'').append(escapeLiteral(text)).append('\'');
+		if (value instanceof Number || value instanceof Boolean) {
+			context.append(value);
 		}
 		else {
-			context.append(value);
+			context.append('\'').append(escapeLiteral(String.valueOf(value))).append('\'');
 		}
 	}
 
@@ -110,6 +124,15 @@ public class OpenArchFilterExpressionConverter extends AbstractFilterExpressionC
 	@Override
 	protected void doEndGroup(Filter.Group group, StringBuilder context) {
 		context.append(')');
+	}
+
+	/** Returns the key without outer quotes, or throws if it is not a plain identifier. */
+	private String validKey(String key) {
+		String name = hasOuterQuotes(key) ? removeOuterQuotes(key) : key;
+		if (name == null || !KEY.matcher(name).matches()) {
+			throw new IllegalArgumentException("Invalid filter key: " + key);
+		}
+		return name;
 	}
 
 	/** Escapes an HXQL string literal: the backslash first, then the quote. */
