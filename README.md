@@ -142,6 +142,7 @@ Do not mix embedding models in one collection: vectors from different models can
 - Writes are not atomic. A replace deletes the old document first, so a failed call can lose the old version or leave a document with no vector.
 - Writing Parquet needs `hadoop-common`, which is a large dependency.
 - The search does not use the permissions of Hyland OpenArch yet: every document of the collection is visible to the configured user.
+- The examples use `admin`, the default user of the engine image. Admin users skip the permission filter of the engine. Outside tests, use a non-admin account with rights on the base path.
 
 ## Build
 
